@@ -1,0 +1,297 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>PT Check-in</title>
+    <style>
+      body {
+        margin: 0;
+        background: #f6f5f0;
+        color: #17211d;
+        font-family: -apple-system, BlinkMacSystemFont, "Helvetica Neue", Arial, sans-serif;
+      }
+      main {
+        max-width: 560px;
+        margin: 0 auto;
+        padding: 22px 16px 120px;
+      }
+      h1 {
+        margin: 0 0 14px;
+        font-size: 34px;
+        line-height: 1.05;
+      }
+      h2 {
+        margin: 28px 0 12px;
+        font-size: 24px;
+      }
+      label {
+        display: block;
+        margin: 12px 0;
+        color: #62706a;
+        font-size: 14px;
+      }
+      input {
+        width: 100%;
+        box-sizing: border-box;
+        margin-top: 6px;
+        padding: 12px;
+        border: 1px solid #d8d4c8;
+        border-radius: 8px;
+        background: #fffdf7;
+        font-size: 17px;
+      }
+      button {
+        width: 100%;
+        min-height: 48px;
+        border: 0;
+        border-radius: 8px;
+        background: #1f6f5b;
+        color: white;
+        font-size: 17px;
+        font-weight: 700;
+      }
+      button:disabled {
+        opacity: .55;
+      }
+      .panel, .course {
+        background: #fffdf7;
+        border: 1px solid #d8d4c8;
+        border-radius: 8px;
+        padding: 16px;
+        margin: 12px 0;
+      }
+      .muted {
+        color: #62706a;
+      }
+      .course strong {
+        display: block;
+        margin-bottom: 8px;
+        font-size: 18px;
+      }
+      .course label {
+        display: -webkit-box;
+        display: flex;
+        gap: 10px;
+        align-items: center;
+        color: #17211d;
+      }
+      .course input {
+        width: auto;
+        margin: 0;
+      }
+      .bar {
+        position: fixed;
+        left: 16px;
+        right: 16px;
+        bottom: 16px;
+        max-width: 560px;
+        margin: 0 auto;
+        background: #fffdf7;
+        border: 1px solid #d8d4c8;
+        border-radius: 8px;
+        padding: 14px;
+      }
+      .toast {
+        position: fixed;
+        left: 20px;
+        right: 20px;
+        bottom: 96px;
+        background: #17211d;
+        color: white;
+        padding: 14px;
+        border-radius: 8px;
+        display: none;
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <h1>Teacher Check-In</h1>
+      <p class="muted">Legacy phone page</p>
+
+      <section id="login" class="panel">
+        <label>Teacher ID
+          <input id="code" inputmode="numeric" autocomplete="username">
+        </label>
+        <label>Birth Date (4 digits)
+          <input id="birth4" inputmode="numeric" maxlength="4" autocomplete="current-password">
+        </label>
+        <button id="loginBtn">Log in</button>
+      </section>
+
+      <section id="dashboard" style="display:none">
+        <h2 id="teacherName"></h2>
+        <h2>Today</h2>
+        <div id="today"></div>
+        <h2>Missed Check-Ins</h2>
+        <div id="missed"></div>
+        <h2>Completed</h2>
+        <div id="completed"></div>
+      </section>
+    </main>
+
+    <div id="bar" class="bar" style="display:none">
+      <p id="count">0 selected</p>
+      <button id="submitBtn">Confirm Check-In</button>
+    </div>
+    <div id="toast" class="toast"></div>
+
+    <script>
+      var API_URL = 'https://script.google.com/macros/s/AKfycby-5DPJlKw-RYUjJQawsCY8gzZPP54QZ_dqWhm-UnPLd82ghGu5jE80L9P1J0HYxXTr/exec';
+      var qrToken = getParam('t') || getParam('token');
+      var loginToken = '';
+      var callbackIndex = 0;
+      var currentTeacher = null;
+
+      function getParam(name) {
+        var query = window.location.search.replace(/^\?/, '').split('&');
+        for (var i = 0; i < query.length; i += 1) {
+          var pair = query[i].split('=');
+          if (decodeURIComponent(pair[0] || '') === name) return decodeURIComponent(pair.slice(1).join('=') || '');
+        }
+        return '';
+      }
+
+      function jsonp(params, done) {
+        var cb = 'legacyJsonp' + (++callbackIndex);
+        var finished = false;
+        params.callback = cb;
+        var timer = window.setTimeout(function() {
+          if (finished) return;
+          finished = true;
+          try { delete window[cb]; } catch (error) { window[cb] = null; }
+          if (script && script.parentNode) script.parentNode.removeChild(script);
+          done({ ok: false, error: 'The server is taking too long to respond. Please try again, or use a newer phone browser.' });
+        }, 30000);
+        window[cb] = function(response) {
+          if (finished) return;
+          finished = true;
+          window.clearTimeout(timer);
+          try { delete window[cb]; } catch (error) { window[cb] = null; }
+          if (script.parentNode) script.parentNode.removeChild(script);
+          done(response);
+        };
+        var parts = [];
+        for (var key in params) {
+          if (params.hasOwnProperty(key)) parts.push(encodeURIComponent(key) + '=' + encodeURIComponent(params[key]));
+        }
+        var script = document.createElement('script');
+        script.src = API_URL + '?' + parts.join('&');
+        script.onerror = function() {
+          if (finished) return;
+          finished = true;
+          window.clearTimeout(timer);
+          try { delete window[cb]; } catch (error) { window[cb] = null; }
+          done({ ok: false, error: 'Network error. Please try again.' });
+        };
+        document.body.appendChild(script);
+      }
+
+      function toast(message) {
+        var node = document.getElementById('toast');
+        node.innerHTML = escapeHtml(message);
+        node.style.display = 'block';
+        window.clearTimeout(window.toastTimer);
+        window.toastTimer = window.setTimeout(function() { node.style.display = 'none'; }, 3200);
+      }
+
+      function setButton(button, busy, label) {
+        if (!button) return;
+        if (!button.getAttribute('data-label')) button.setAttribute('data-label', button.innerHTML);
+        button.disabled = !!busy;
+        button.innerHTML = busy ? label : button.getAttribute('data-label');
+      }
+
+      function escapeHtml(value) {
+        return String(value == null ? '' : value)
+          .replace(/&/g, '&amp;')
+          .replace(/</g, '&lt;')
+          .replace(/>/g, '&gt;')
+          .replace(/"/g, '&quot;')
+          .replace(/'/g, '&#039;');
+      }
+
+      function renderList(rootId, items, allowCheckin) {
+        var root = document.getElementById(rootId);
+        if (!items || !items.length) {
+          root.innerHTML = '<div class="panel muted">No check-ins to process.</div>';
+          return;
+        }
+        var html = '';
+        for (var i = 0; i < items.length; i += 1) {
+          var item = items[i];
+          html += '<div class="course"><strong>' + escapeHtml(item.courseName) + '</strong>';
+          html += '<p class="muted">' + escapeHtml(item.date) + ' · ' + escapeHtml(item.hours) + ' hours</p>';
+          if (item.status === 'ACTIVE') {
+            html += '<p>Checked in</p>';
+          } else if (allowCheckin) {
+            html += '<label><input type="checkbox" class="check" data-date="' + escapeHtml(item.date) + '" data-course-id="' + escapeHtml(item.courseId) + '"> Select check-in</label>';
+          }
+          html += '</div>';
+        }
+        root.innerHTML = html;
+      }
+
+      function renderDashboard(data) {
+        currentTeacher = data.teacher || currentTeacher;
+        document.getElementById('login').style.display = 'none';
+        document.getElementById('dashboard').style.display = 'block';
+        document.getElementById('teacherName').innerHTML = escapeHtml(currentTeacher.Name);
+        renderList('today', data.courses.today, true);
+        renderList('missed', data.courses.missed, true);
+        renderList('completed', data.courses.completed, false);
+        updateBar();
+      }
+
+      function updateBar() {
+        var checks = document.querySelectorAll('.check:checked');
+        document.getElementById('count').innerHTML = checks.length + ' selected';
+        document.getElementById('bar').style.display = checks.length ? 'block' : 'none';
+      }
+
+      document.getElementById('loginBtn').onclick = function() {
+        var btn = this;
+        if (!qrToken) return toast('Missing QR token. Please scan the on-site QR Code again.');
+        setButton(btn, true, 'Signing in...');
+        jsonp({
+          api: 'login',
+          qrToken: qrToken,
+          code: document.getElementById('code').value,
+          birth4: document.getElementById('birth4').value
+        }, function(response) {
+          setButton(btn, false);
+          if (!response.ok) return toast(response.error);
+          loginToken = response.result.loginToken;
+          currentTeacher = response.result.teacher;
+          renderDashboard({ teacher: response.result.teacher, courses: response.result.courses });
+        });
+      };
+
+      document.body.onchange = function(event) {
+        if (event.target && event.target.className === 'check') updateBar();
+      };
+
+      document.getElementById('submitBtn').onclick = function() {
+        var btn = this;
+        var checks = document.querySelectorAll('.check:checked');
+        var items = [];
+        for (var i = 0; i < checks.length; i += 1) {
+          items.push({ date: checks[i].getAttribute('data-date'), courseId: checks[i].getAttribute('data-course-id') });
+        }
+        if (!items.length) return;
+        setButton(btn, true, 'Checking in...');
+        jsonp({
+          api: 'batchCheckIn',
+          loginToken: loginToken,
+          items: JSON.stringify(items)
+        }, function(response) {
+          setButton(btn, false);
+          if (!response.ok) return toast(response.error);
+          renderDashboard({ teacher: response.result.teacher || currentTeacher, courses: response.result.dashboard || response.result.courses });
+          toast(response.result.message || 'Done');
+        });
+      };
+    </script>
+  </body>
+</html>
