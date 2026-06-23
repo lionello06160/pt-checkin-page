@@ -143,6 +143,7 @@
       var loginToken = '';
       var callbackIndex = 0;
       var currentTeacher = null;
+      var SERVER_TIMEOUT_MS = 90000;
 
       function getParam(name) {
         var query = window.location.search.replace(/^\?/, '').split('&');
@@ -163,7 +164,7 @@
           try { delete window[cb]; } catch (error) { window[cb] = null; }
           if (script && script.parentNode) script.parentNode.removeChild(script);
           done({ ok: false, error: 'The server is taking too long to respond. Please try again, or use a newer phone browser.' });
-        }, 30000);
+        }, SERVER_TIMEOUT_MS);
         window[cb] = function(response) {
           if (finished) return;
           finished = true;
@@ -244,6 +245,18 @@
         updateBar();
       }
 
+      function loadDashboard(onDone) {
+        jsonp({
+          api: 'dashboard',
+          loginToken: loginToken
+        }, function(response) {
+          if (response.ok) {
+            renderDashboard(response.result);
+          }
+          if (onDone) onDone(response);
+        });
+      }
+
       function updateBar() {
         var checks = document.querySelectorAll('.check:checked');
         document.getElementById('count').innerHTML = checks.length + ' selected';
@@ -288,8 +301,14 @@
         }, function(response) {
           setButton(btn, false);
           if (!response.ok) return toast(response.error);
-          renderDashboard({ teacher: response.result.teacher || currentTeacher, courses: response.result.dashboard || response.result.courses });
           toast(response.result.message || 'Done');
+          if (response.result.dashboard || response.result.courses) {
+            renderDashboard({ teacher: response.result.teacher || currentTeacher, courses: response.result.dashboard || response.result.courses });
+            return;
+          }
+          loadDashboard(function(refreshResponse) {
+            if (!refreshResponse.ok) toast((response.result.message || 'Done') + '. Refresh the page to see the latest check-ins.');
+          });
         });
       };
     </script>
