@@ -54,7 +54,7 @@
       button:disabled {
         opacity: .55;
       }
-      .panel, .course {
+      .panel, .date-group {
         background: #fffdf7;
         border: 1px solid #d8d4c8;
         border-radius: 8px;
@@ -64,21 +64,65 @@
       .muted {
         color: #62706a;
       }
-      .course strong {
+      .date-group {
+        padding: 0;
+        overflow: hidden;
+      }
+      .date-heading {
+        padding: 14px 16px 10px;
+        border-bottom: 1px solid #e5e0d4;
+      }
+      .date-heading strong {
         display: block;
-        margin-bottom: 8px;
         font-size: 18px;
       }
-      .course label {
+      .date-heading span {
+        display: block;
+        margin-top: 3px;
+        color: #62706a;
+        font-size: 14px;
+      }
+      .session-row {
         display: -webkit-box;
         display: flex;
+        -webkit-box-pack: justify;
+        justify-content: space-between;
         gap: 10px;
         align-items: center;
-        color: #17211d;
+        padding: 14px 16px;
+        border-top: 1px solid #eee9dc;
       }
-      .course input {
+      .date-heading + .session-row {
+        border-top: 0;
+      }
+      .session-main {
+        min-width: 0;
+      }
+      .session-time {
+        display: block;
+        font-size: 20px;
+        font-weight: 800;
+        line-height: 1.1;
+      }
+      .session-meta {
+        display: block;
+        margin-top: 4px;
+        color: #62706a;
+        font-size: 14px;
+      }
+      .session-action {
+        margin: 0;
+        color: #17211d;
+        white-space: nowrap;
+      }
+      .session-action input {
         width: auto;
         margin: 0;
+      }
+      .status-text {
+        font-weight: 700;
+        color: #236c45;
+        white-space: nowrap;
       }
       .bar {
         position: fixed;
@@ -213,6 +257,52 @@
           .replace(/'/g, '&#039;');
       }
 
+      function parseCourseName(courseName) {
+        var match = String(courseName || '').match(/^([A-Za-z]{3})\s+(.+)$/);
+        return {
+          weekday: match ? match[1] : '',
+          time: match ? match[2] : String(courseName || '')
+        };
+      }
+
+      function formatHours(hours) {
+        var value = Number(hours || 0);
+        if (value === 1) return '1 hr';
+        if (value && Math.floor(value) !== value) return value + ' hrs';
+        return (value || 0) + ' hrs';
+      }
+
+      function formatDateHeading(date, fallbackWeekday) {
+        var parts = String(date || '').split('-');
+        if (parts.length !== 3) return { title: date || 'Unknown date', detail: fallbackWeekday || '' };
+        var parsed = new Date(Number(parts[0]), Number(parts[1]) - 1, Number(parts[2]));
+        if (isNaN(parsed.getTime())) return { title: date, detail: fallbackWeekday || '' };
+        var today = new Date();
+        var todayKey = today.getFullYear() + '-' + ('0' + (today.getMonth() + 1)).slice(-2) + '-' + ('0' + today.getDate()).slice(-2);
+        var weekday = fallbackWeekday || ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'][parsed.getDay()];
+        var month = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'][parsed.getMonth()];
+        var readable = weekday + ', ' + month + ' ' + parsed.getDate() + ', ' + parsed.getFullYear();
+        return {
+          title: date === todayKey ? 'Today' : readable,
+          detail: date === todayKey ? readable : ''
+        };
+      }
+
+      function groupByDate(items) {
+        var groups = [];
+        var byDate = {};
+        for (var i = 0; i < items.length; i += 1) {
+          var item = items[i];
+          var date = item.date || '';
+          if (!byDate[date]) {
+            byDate[date] = [];
+            groups.push({ date: date, items: byDate[date] });
+          }
+          byDate[date].push(item);
+        }
+        return groups;
+      }
+
       function renderList(rootId, items, allowCheckin) {
         var root = document.getElementById(rootId);
         if (!items || !items.length) {
@@ -220,14 +310,27 @@
           return;
         }
         var html = '';
-        for (var i = 0; i < items.length; i += 1) {
-          var item = items[i];
-          html += '<div class="course"><strong>' + escapeHtml(item.courseName) + '</strong>';
-          html += '<p class="muted">' + escapeHtml(item.date) + ' · ' + escapeHtml(item.hours) + ' hours</p>';
-          if (item.status === 'ACTIVE') {
-            html += '<p>Checked in</p>';
-          } else if (allowCheckin) {
-            html += '<label><input type="checkbox" class="check" data-date="' + escapeHtml(item.date) + '" data-course-id="' + escapeHtml(item.courseId) + '"> Select check-in</label>';
+        var groups = groupByDate(items);
+        for (var g = 0; g < groups.length; g += 1) {
+          var firstCourse = parseCourseName(groups[g].items[0] && groups[g].items[0].courseName);
+          var heading = formatDateHeading(groups[g].date, firstCourse.weekday);
+          html += '<div class="date-group">';
+          html += '<div class="date-heading"><strong>' + escapeHtml(heading.title) + '</strong>';
+          if (heading.detail) html += '<span>' + escapeHtml(heading.detail) + '</span>';
+          html += '</div>';
+          for (var i = 0; i < groups[g].items.length; i += 1) {
+            var item = groups[g].items[i];
+            var course = parseCourseName(item.courseName);
+            html += '<div class="session-row"><div class="session-main">';
+            html += '<span class="session-time">' + escapeHtml(course.time) + '</span>';
+            html += '<span class="session-meta">' + escapeHtml(formatHours(item.hours)) + '</span>';
+            html += '</div>';
+            if (item.status === 'ACTIVE') {
+              html += '<span class="status-text">Checked in</span>';
+            } else if (allowCheckin) {
+              html += '<label class="session-action"><input type="checkbox" class="check" data-date="' + escapeHtml(item.date) + '" data-course-id="' + escapeHtml(item.courseId) + '"> Select</label>';
+            }
+            html += '</div>';
           }
           html += '</div>';
         }
