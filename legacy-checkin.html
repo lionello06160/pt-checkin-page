@@ -125,6 +125,18 @@
       .muted {
         color: #62706a;
       }
+      .missed-notice {
+        display: none;
+        margin: 14px 0 4px;
+        padding: 13px 14px;
+        border: 1px solid #d8b18c;
+        border-left: 5px solid #bd5b2f;
+        border-radius: 8px;
+        background: #fff3e7;
+        color: #17211d;
+        font-weight: 800;
+        line-height: 1.35;
+      }
       .logged-in .page-title,
       .logged-in .page-subtitle {
         display: none;
@@ -254,6 +266,7 @@
 
       <section id="dashboard" style="display:none">
         <h2 id="teacherName"></h2>
+        <div id="missedNotice" class="missed-notice"></div>
         <h2>Today</h2>
         <div id="today"></div>
         <h2>Missed Check-Ins</h2>
@@ -442,10 +455,21 @@
         document.getElementById('login').style.display = 'none';
         document.getElementById('dashboard').style.display = 'block';
         document.getElementById('teacherName').innerHTML = escapeHtml(currentTeacher.Name);
+        updateMissedNotice((data.courses && data.courses.missed) || []);
         renderList('today', data.courses.today, true);
         renderList('missed', data.courses.missed, true);
         renderList('completed', data.courses.completed, false);
         updateBar();
+      }
+
+      function updateMissedNotice(missed) {
+        var notice = document.getElementById('missedNotice');
+        if (!notice) return;
+        var count = missed ? missed.length : 0;
+        notice.style.display = count ? 'block' : 'none';
+        notice.innerHTML = count
+          ? escapeHtml('You have ' + count + ' missed check-in' + (count === 1 ? '' : 's') + ' to complete.')
+          : '';
       }
 
       function loadDashboard(onDone) {
